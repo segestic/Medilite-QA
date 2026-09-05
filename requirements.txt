@@ -33,3 +33,4 @@ llama-cpp-python>=0.2.90
 sentencepiece>=0.2.0
 protobuf>=4.25.0
 openai>=1.30
+gguf>=0.10.0

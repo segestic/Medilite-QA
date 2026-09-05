@@ -12,8 +12,8 @@ Medilite-QA/
 └── src/
     ├── data_loader.py       # Strict train-split loading and ChatML formatting
     ├── __init__.py
-    └── train.py             # QLoRA configuration and SFTTrainer execution
-
+    ├── train.py             # QLoRA configuration and SFTTrainer execution
+    └── convert.py           # NEW: Merges LoRA, converts to GGUF, quantizes, and pushes
 ```
 
 ## 2. Pipeline Overview
@@ -89,5 +89,18 @@ pip install -r requirements.txt
 python src/train.py
 
 ```
+## 5. Merge and Convert to GGUF
 
+Once your model is fine-tuned, you can merge the LoRA adapter into the base model, convert it to GGUF format, and generate quantized versions (like `Q4_K_M` or `Q8_0`) for fast CPU/edge inference. 
+
+Because `llama.cpp` is pre-compiled inside the Docker image, you can run this script immediately.
+
+```bash
+docker run --ipc=host -it --rm \
+  -v $(pwd):/workspace \
+  -e HF_HUB_TOKEN=$HF_HUB_TOKEN \
+  medilite-qa:latest \
+  python src/convert.py \
+    --lora_adapter "segestic/phi3.5-mini-4k-qlora-medical-seg-vall_med" \
+    --push_repo "segestic/MediLITE-QA-GGUF"
 ```
