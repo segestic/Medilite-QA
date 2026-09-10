@@ -9,11 +9,13 @@ def get_prepared_datasets(tokenizer):
     print("Loading datasets (Train splits only)...")
     medmcqa_dataset = load_dataset("openlifescienceai/medmcqa", split="train")
     pubmedqa_dataset = load_dataset("bigbio/pubmed_qa", trust_remote_code=True, split="train")
-    meddialog_dataset = load_dataset("bluewhx/meddialog_en", split="train")
+    medqa_dataset = load_dataset("GBaker/MedQA-USMLE-4-options", split="train")
 
     # ==========================================
     # 1. Exact Original Extraction Functions
     # ==========================================
+    
+    # --- MedMCQA ---
     def doc_to_text_medmcqa(doc):
         choices = [doc.get("opa", ""), doc.get("opb", ""), doc.get("opc", ""), doc.get("opd", "")]
         option_choices = {"A": choices[0], "B": choices[1], "C": choices[2], "D": choices[3]}
@@ -25,6 +27,7 @@ def get_prepared_datasets(tokenizer):
         correct_answer = ["A", "B", "C", "D"][doc.get('cop', -1)] if 0 <= doc.get('cop', -1) <= 3 else "NULL"
         return correct_answer  
 
+    # --- PubMedQA ---
     def doc_to_text_pubmedqa(doc):
         ctxs = "\n".join(doc.get("CONTEXTS", []))
         prompt = f"Abstract: {ctxs}\nQuestion: {doc.get('QUESTION', '')}\n"
@@ -32,20 +35,28 @@ def get_prepared_datasets(tokenizer):
         return prompt, choice_
 
     def doc_to_answer_pubmedqa(doc):
-        return doc.get('final_decision', 'NULL')
+        # Maps "yes", "no", "maybe" to A, B, C for consistency with other datasets
+        decision = doc.get('final_decision', '').lower()
+        if decision == 'yes': return 'A'
+        if decision == 'no': return 'B'
+        if decision == 'maybe': return 'C'
+        return 'NULL'
 
-    def doc_to_text_meddialog(doc):
-        prompt = "Clinical Dialogue:\n"
-        choice_ = doc.get("patient", "") 
+    # --- MedQA (USMLE) ---
+    def doc_to_text_medqa(doc):
+        prompt = f"{doc.get('question', '')}\n"
+        options = doc.get('options', {})
+        choice_ = "\n".join([f"{key}. {val}" for key, val in options.items()])
         return prompt, choice_
 
-    def doc_to_answer_meddialog(doc):
-        return doc.get("doctor", "")
+    def doc_to_answer_medqa(doc):
+        return doc.get('answer_idx', 'NULL')
 
     # ==========================================
     # 2. Process and map into standard columns
     # ==========================================
     print("Mapping to Instruction/Input/Output format...")
+    
     medmcqa_sliced = medmcqa_dataset.map(
         lambda x: {'instruction': doc_to_text_medmcqa(x)[0], 'input': doc_to_text_medmcqa(x)[1], 'output': doc_to_answer_medmcqa(x)},
         remove_columns=medmcqa_dataset.column_names
@@ -56,12 +67,13 @@ def get_prepared_datasets(tokenizer):
         remove_columns=pubmedqa_dataset.column_names
     )
     
-    meddialog_sliced = meddialog_dataset.map(
-        lambda x: {'instruction': doc_to_text_meddialog(x)[0], 'input': doc_to_text_meddialog(x)[1], 'output': doc_to_answer_meddialog(x)},
-        remove_columns=meddialog_dataset.column_names
+    
+    medqa_sliced = medqa_dataset.map(
+        lambda x: {'instruction': doc_to_text_medqa(x)[0], 'input': doc_to_text_medqa(x)[1], 'output': doc_to_answer_medqa(x)},
+        remove_columns=medqa_dataset.column_names
     )
 
-    combined_dataset = concatenate_datasets([medmcqa_sliced, pubmedqa_sliced, meddialog_sliced])
+    combined_dataset = concatenate_datasets([medmcqa_sliced, pubmedqa_sliced, medqa_sliced])
 
     # ==========================================
     # 3. Apply exact ChatML formatting
