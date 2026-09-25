@@ -108,12 +108,9 @@ def main():
         bf16=torch.cuda.is_bf16_supported(),
         eval_steps=100,
         num_train_epochs=3,
-        
-        # --- ALIGNED WITH THESIS TEXT ---
         weight_decay=0.1,    # Text: "weight decay of 0.1"
         warmup_steps=100,    # Text: "100-step linear warmup"
         lr_scheduler_type="linear",
-        # --------------------------------
         
         report_to="wandb" if os.getenv("WANDB_API_KEY") else "none",
         seed=seed,
