@@ -86,7 +86,7 @@ pip install -r requirements.txt
 *(Assuming you already exported the API keys in Step 3)*
 
 ```bash
-python src/train.py
+python -m src.train
 
 ```
 ## 5. Merge and Convert to GGUF
