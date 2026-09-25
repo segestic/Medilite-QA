@@ -46,11 +46,7 @@ RUN git clone https://github.com/ggerganov/llama.cpp /workspace/llama.cpp \
 ENV LLAMA_CPP_DIR=/workspace/llama.cpp
 
 # 6. Pipeline Code + Config
-COPY scripts/ /workspace/scripts/
-COPY configs/ /workspace/configs/
-
-# Using || true safely catches if the directory is empty/missing scripts during image build
-RUN chmod +x /workspace/scripts/*.sh || true
+COPY src/ /workspace/src/
 
 WORKDIR /workspace
 
