@@ -60,7 +60,7 @@ docker run --gpus all --ipc=host -it --rm \
 
 ```
 
-*Note: The `Dockerfile` has `ENTRYPOINT ["python", "src/train.py"]`, so running the container automatically kicks off the training script.*
+*Note: The `Dockerfile` has `ENTRYPOINT ["python", "-m", "src.train"]`, so running the container automatically kicks off the training script.*
 
 ### Option B: Run via Conda (Without Docker)
 
