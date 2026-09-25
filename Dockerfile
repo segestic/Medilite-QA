@@ -52,6 +52,7 @@ COPY configs/ /workspace/configs/
 # Using || true safely catches if the directory is empty/missing scripts during image build
 RUN chmod +x /workspace/scripts/*.sh || true
 
-WORKDIR /workspace/scripts
+WORKDIR /workspace
 
-CMD ["/bin/bash"]
+# Fix: Run python as a module from the root directory
+ENTRYPOINT ["python", "-m", "src.train"]
