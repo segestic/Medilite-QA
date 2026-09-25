@@ -81,7 +81,7 @@ Because our `requirements.txt` already specifies the PyTorch `cu128` index, you 
 pip install -r requirements.txt
 
 # Pin core AI toolchains (grouped together so pip cannot silently downgrade them)
-pip install transformers==4.57.6 trl==0.11.4 peft==0.19.1 accelerate==1.13.0
+pip install transformers==4.57.6 trl==0.19.1 peft==0.19.1 accelerate==1.13.0
 
 # Install Flash Attention
 pip install flash-attn==2.8.3 --no-build-isolation
