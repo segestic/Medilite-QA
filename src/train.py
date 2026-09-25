@@ -30,10 +30,12 @@ def main():
     # 2. Identify GPU capabilities
     if torch.cuda.is_bf16_supported():
         compute_dtype = torch.bfloat16
-        attn_implementation = 'flash_attention_2'
+        # attn_implementation = 'flash_attention_2'
+        attn_implementation = 'eager'
     else:
         compute_dtype = torch.float16
-        attn_implementation = 'sdpa'
+        # attn_implementation = 'sdpa'
+        attn_implementation = 'eager'
         
     print(f"Using attention implementation: {attn_implementation}")
     print(f"Using compute dtype: {compute_dtype}")
