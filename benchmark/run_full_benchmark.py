@@ -548,7 +548,7 @@ MODEL_ROUTING = {
     "OpenBio": {
         "repo_id": "bartowski/OpenBioLLM-Llama3-8B-GGUF",
         "filename": "OpenBioLLM-Llama3-8B-Q4_K_M.gguf",
-        "type": "chat", "format": "chatml", "stop": ["<|im_end|>"],
+        "type": "chat", "format": "llama-3", "stop": None,
         "accuracy": 72.5,
     },
     "Medilite-QA": {
@@ -560,7 +560,7 @@ MODEL_ROUTING = {
     "BioMistral-7B": {
         "repo_id": "BioMistral/BioMistral-7B-GGUF",
         "filename": "ggml-model-Q4_K_M.gguf",
-        "type": "chat", "format": "chatml", "stop": ["<|im_end|>"],
+        "type": "chat", "format": "mistral-instruct", "stop": None,
         # NOTE: verified spreadsheet shows two different figures for this
         # model -- a stated average of 57.3 vs. a recalculated ("seg_calc")
         # average of 58.96666667 from its own per-benchmark row. Flagging
