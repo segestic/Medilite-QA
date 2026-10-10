@@ -1,0 +1,185 @@
+{
+    "model_info": {
+        "base_model": "MediLITE-QA.Q4_K_M.gguf",
+        "accuracy": 73.06888889
+    },
+    "system_info": {
+        "platform": "Linux-6.14.0-37-generic-x86_64-with-glibc2.41",
+        "cpu_brand": "11th Gen Intel(R) Core(TM) i5-1135G7 @ 2.40GHz",
+        "cpu_cores_logical": 8,
+        "cpu_cores_physical": 4,
+        "memory_total_gb": 6.96,
+        "gpu_device_name": "none detected (CPU-only run, n_gpu_layers=0)"
+    },
+    "n_runs": 3,
+    "total_completion_time_metrics": {
+        "mean_total_prompt_time": {
+            "mean": 1.3210538106662473,
+            "stdev": 0.03835223391315611
+        },
+        "mean_overall_sec_per_token": {
+            "mean": 0.1220307831046518,
+            "stdev": 0.00034420297754771145
+        },
+        "p50_overall_spt": {
+            "mean": 0.12183219578682204,
+            "stdev": 0.0
+        },
+        "p90_overall_spt": {
+            "mean": 0.12184246952325592,
+            "stdev": 0.0
+        },
+        "p99_overall_spt": {
+            "mean": 0.12184478111395355,
+            "stdev": 0.0
+        }
+    },
+    "streaming_latency_metrics": {
+        "cold_start_ttft_s": 1.2826779280003393,
+        "mean_ttft": {
+            "mean": 1.3210538106662473,
+            "stdev": 0.03835223391315611
+        },
+        "mean_ttft_warm_only": {
+            "mean": 1.3402417519992014,
+            "stdev": 0.027068896111174762
+        },
+        "p50_ttft": {
+            "mean": 1.3402417519992014,
+            "stdev": 0.0
+        },
+        "p90_ttft": {
+            "mean": 1.3555542319987581,
+            "stdev": 0.0
+        },
+        "p99_ttft": {
+            "mean": 1.3589995399986583,
+            "stdev": 0.0
+        },
+        "mean_tpot": {
+            "mean": 0.11736532385343938,
+            "stdev": 0.00048259337146458627
+        },
+        "p50_tpot": {
+            "mean": 0.11709130257198787,
+            "stdev": 0.0
+        },
+        "p90_tpot": {
+            "mean": 0.11716119791828943,
+            "stdev": 0.0
+        },
+        "p99_tpot": {
+            "mean": 0.11717692437120729,
+            "stdev": 0.0
+        }
+    },
+    "throughput_metrics": {
+        "batch_1": {
+            "tokens_per_sec": {
+                "mean": 8.190402962819064,
+                "stdev": 0.009391136051750707
+            },
+            "avg_gpu_util_pct": {
+                "mean": 0.0,
+                "stdev": 0.0
+            },
+            "avg_cpu_util_pct": {
+                "mean": 52.48560502770938,
+                "stdev": 0.04044085884815803
+            }
+        },
+        "batch_2": {
+            "tokens_per_sec": {
+                "mean": 8.319852569437009,
+                "stdev": 0.04454154124534919
+            },
+            "avg_gpu_util_pct": {
+                "mean": 0.0,
+                "stdev": 0.0
+            },
+            "avg_cpu_util_pct": {
+                "mean": 51.38587401987013,
+                "stdev": 0.1771778041054575
+            }
+        },
+        "batch_4": {
+            "tokens_per_sec": {
+                "mean": 8.42057093428398,
+                "stdev": 0.04131148932134487
+            },
+            "avg_gpu_util_pct": {
+                "mean": 0.0,
+                "stdev": 0.0
+            },
+            "avg_cpu_util_pct": {
+                "mean": 50.934178530663296,
+                "stdev": 0.0997724676479694
+            }
+        },
+        "batch_8": {
+            "tokens_per_sec": {
+                "mean": 8.49380781627297,
+                "stdev": 0.0032053642369568014
+            },
+            "avg_gpu_util_pct": {
+                "mean": 0.0,
+                "stdev": 0.0
+            },
+            "avg_cpu_util_pct": {
+                "mean": 50.71600279152054,
+                "stdev": 0.0020793530119391575
+            }
+        },
+        "batch_16": {
+            "tokens_per_sec": {
+                "mean": 8.516743466312105,
+                "stdev": 0.0009730350703466804
+            },
+            "avg_gpu_util_pct": {
+                "mean": 0.0,
+                "stdev": 0.0
+            },
+            "avg_cpu_util_pct": {
+                "mean": 50.56468352681039,
+                "stdev": 0.006181699557015712
+            }
+        }
+    },
+    "environmental_impact": {
+        "avg_power_w": 35.54424973258088,
+        "energy_per_token_kwh": 1.2102775708268418e-06,
+        "emissions_per_token_kg_co2eq": 1.2102775708268418e-06
+    },
+    "figure_3_4_metrics": {
+        "energy_kwh": {
+            "mean": 1.2102775708268418e-06,
+            "stdev": 2.4246369946988144e-09
+        },
+        "latency_per_token": {
+            "mean": 0.003875968992248062,
+            "stdev": 0.0
+        },
+        "util_pct": {
+            "mean": 35.54424973258088,
+            "stdev": 0.07798467125008579
+        }
+    },
+    "memory_context_metrics": {
+        "512": {
+            "mean": 3830.203125,
+            "stdev": 0.12178482240718669
+        },
+        "1024": {
+            "mean": 4022.43359375,
+            "stdev": 0.0
+        },
+        "1536": {
+            "mean": 4214.3125,
+            "stdev": 0.0
+        },
+        "2000": {
+            "mean": 4403.165364583333,
+            "stdev": 2.6341606031776674
+        }
+    }
+}

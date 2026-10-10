@@ -1,0 +1,185 @@
+{
+    "model_info": {
+        "base_model": "Meta-Llama-3-8B.Q4_K_M.gguf",
+        "accuracy": null
+    },
+    "system_info": {
+        "platform": "Linux-6.14.0-37-generic-x86_64-with-glibc2.41",
+        "cpu_brand": "11th Gen Intel(R) Core(TM) i5-1135G7 @ 2.40GHz",
+        "cpu_cores_logical": 8,
+        "cpu_cores_physical": 4,
+        "memory_total_gb": 6.96,
+        "gpu_device_name": "none detected (CPU-only run, n_gpu_layers=0)"
+    },
+    "n_runs": 3,
+    "total_completion_time_metrics": {
+        "mean_total_prompt_time": {
+            "mean": 5.815835181000087,
+            "stdev": 7.339413649745492
+        },
+        "mean_overall_sec_per_token": {
+            "mean": 0.27754496265333484,
+            "stdev": 0.09606587076130294
+        },
+        "p50_overall_spt": {
+            "mean": 0.2220814546520014,
+            "stdev": 0.0
+        },
+        "p90_overall_spt": {
+            "mean": 0.22225920177200245,
+            "stdev": 0.0
+        },
+        "p99_overall_spt": {
+            "mean": 0.22229919487400263,
+            "stdev": 0.0
+        }
+    },
+    "streaming_latency_metrics": {
+        "cold_start_ttft_s": 14.29007023000031,
+        "mean_ttft": {
+            "mean": 5.815835181000087,
+            "stdev": 7.339413649745492
+        },
+        "mean_ttft_warm_only": {
+            "mean": 1.5787176564999754,
+            "stdev": 0.12245793394120338
+        },
+        "p50_ttft": {
+            "mean": 1.5787176564999754,
+            "stdev": 0.0
+        },
+        "p90_ttft": {
+            "mean": 1.6479903248999108,
+            "stdev": 0.0
+        },
+        "p99_ttft": {
+            "mean": 1.6635766752898962,
+            "stdev": 0.0
+        },
+        "mean_tpot": {
+            "mean": 0.2328813318602159,
+            "stdev": 0.03765862370349375
+        },
+        "p50_tpot": {
+            "mean": 0.2111408401209694,
+            "stdev": 0.0
+        },
+        "p90_tpot": {
+            "mean": 0.2115203101080646,
+            "stdev": 0.0
+        },
+        "p99_tpot": {
+            "mean": 0.211605690855161,
+            "stdev": 0.0
+        }
+    },
+    "throughput_metrics": {
+        "batch_1": {
+            "tokens_per_sec": {
+                "mean": 4.514805926479521,
+                "stdev": 0.007333958340465513
+            },
+            "avg_gpu_util_pct": {
+                "mean": 0.0,
+                "stdev": 0.0
+            },
+            "avg_cpu_util_pct": {
+                "mean": 52.92392709705753,
+                "stdev": 0.03602850190793409
+            }
+        },
+        "batch_2": {
+            "tokens_per_sec": {
+                "mean": 4.613200180798262,
+                "stdev": 0.004689891750669465
+            },
+            "avg_gpu_util_pct": {
+                "mean": 0.0,
+                "stdev": 0.0
+            },
+            "avg_cpu_util_pct": {
+                "mean": 51.880190705980176,
+                "stdev": 0.019762407287629364
+            }
+        },
+        "batch_4": {
+            "tokens_per_sec": {
+                "mean": 4.676881241616657,
+                "stdev": 0.0010983438016931592
+            },
+            "avg_gpu_util_pct": {
+                "mean": 0.0,
+                "stdev": 0.0
+            },
+            "avg_cpu_util_pct": {
+                "mean": 51.195627240143374,
+                "stdev": 0.010597991143211976
+            }
+        },
+        "batch_8": {
+            "tokens_per_sec": {
+                "mean": 4.711286537287904,
+                "stdev": 0.0018604533286127186
+            },
+            "avg_gpu_util_pct": {
+                "mean": 0.0,
+                "stdev": 0.0
+            },
+            "avg_cpu_util_pct": {
+                "mean": 50.79659687711668,
+                "stdev": 0.00835780666293588
+            }
+        },
+        "batch_16": {
+            "tokens_per_sec": {
+                "mean": 4.730432432441571,
+                "stdev": 0.0003600753368942639
+            },
+            "avg_gpu_util_pct": {
+                "mean": 0.0,
+                "stdev": 0.0
+            },
+            "avg_cpu_util_pct": {
+                "mean": 50.61200636619236,
+                "stdev": 0.0030427636563639523
+            }
+        }
+    },
+    "environmental_impact": {
+        "avg_power_w": 34.63924699491601,
+        "energy_per_token_kwh": 2.137936157764614e-06,
+        "emissions_per_token_kg_co2eq": 2.137936157764614e-06
+    },
+    "figure_3_4_metrics": {
+        "energy_kwh": {
+            "mean": 2.137936157764614e-06,
+            "stdev": 4.910854748719466e-10
+        },
+        "latency_per_token": {
+            "mean": 0.008,
+            "stdev": 0.0
+        },
+        "util_pct": {
+            "mean": 34.63924699491601,
+            "stdev": 0.04579847360552729
+        }
+    },
+    "memory_context_metrics": {
+        "512": {
+            "mean": 6293.516927083333,
+            "stdev": 20.45405242736748
+        },
+        "1024": {
+            "mean": 6342.5625,
+            "stdev": 8.4843651084772
+        },
+        "1536": {
+            "mean": 6348.372395833333,
+            "stdev": 29.8044912482617
+        },
+        "2000": {
+            "mean": 6316.013020833333,
+            "stdev": 22.741114407724357
+        }
+    }
+}
