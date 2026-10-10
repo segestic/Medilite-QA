@@ -1,0 +1,24 @@
+{
+  "cpu_brand": "11th Gen Intel(R) Core(TM) i5-1135G7 @ 2.40GHz",
+  "llama_cpp_python_version": "0.3.35",
+  "codecarbon_version": "3.3.0",
+  "max_new_tokens": 256,
+  "temperature": 0.0,
+  "n_ctx": 2048,
+  "n_threads": 4,
+  "n_prompts": 25,
+  "n_runs_per_prompt": 2,
+  "library_sampling_defaults": {
+    "top_p": 0.95,
+    "top_k": 40,
+    "min_p": 0.05,
+    "repeat_penalty": 1.0,
+    "presence_penalty": 0.0,
+    "frequency_penalty": 0.0,
+    "typical_p": 1.0,
+    "seed": null
+  },
+  "idle_baseline_s": 30,
+  "cooldown_s": 60,
+  "started": "2026-10-08 16:06:26"
+}
