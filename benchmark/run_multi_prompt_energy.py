@@ -1,41 +1,65 @@
 """
-run_multi_prompt_energy.py
-==========================
-A scoped-down benchmark script to address the multi-prompt energy 
-concern. Strips out latency, throughput, and memory measurements to focus 
-solely on CodeCarbon RAPL energy readings across 25 diverse clinical prompts.
+run_multi_prompt_energy.py  (revision for MDPI Sustainability, R1.2 / R3.4)
+=============================================================================
+CodeCarbon/RAPL energy across 25 high-risk clinical prompts, in two modes:
+
+  natural : model may stop at EOS (as in the submitted manuscript)
+  fixed   : EOS / end-of-turn tokens banned via logit_bias, so every
+            generation runs to exactly MAX_NEW_TOKENS (Reviewer 1, point 2)
+
+Changes vs. the submitted version:
+  * host + RAPL-readability guards (imported from run_full_benchmark.py)
+  * exact token counts from llama.cpp `usage` (no stream-chunk counting)
+  * one discarded warm-up generation per model (removes cold-start energy)
+  * idle-power baseline per model; raw and idle-subtracted energy reported
+  * CPU-package and RAM energy recorded separately (CodeCarbon's
+    energy_consumed = cpu + ram + gpu; RAM is a model-based estimate)
+  * every individual run saved (raw records) for later re-analysis
+  * prompt-clustered bootstrap 95% CI, pooled J/token, and %-at-full-length
+  * effective sampling parameters + library versions logged (Reviewer 1, point 4)
+
+Usage:
+    sudo $(which python3) run_multi_prompt_energy.py --mode both
+    sudo $(which python3) run_multi_prompt_energy.py --model Medilite-QA --mode fixed
 """
 
 import argparse
 import gc
+import inspect
 import json
 import os
-import platform
+import random
+import re
 import statistics
 import time
-import psutil
 
+import llama_cpp
 from llama_cpp import Llama
+from codecarbon import EmissionsTracker
+import codecarbon
 
-try:
-    from codecarbon import EmissionsTracker
-    HAS_CODECARBON = True
-except ImportError:
-    HAS_CODECARBON = False
+from run_full_benchmark import (
+    MODEL_ROUTING, LOCAL_DIR, N_THREADS, N_CTX,
+    assert_correct_host, assert_rapl_readable, check_power_plausibility,
+    cpu_brand,
+)
 
 # ==============================================================================
-# CONFIG & 25 HIGH-RISK PROMPTS
+# CONFIG
 # ==============================================================================
 
 MAX_NEW_TOKENS = 256
-N_THREADS = 4
-N_RUNS_PER_PROMPT = 2  # Reduced to 2 to save wall-clock time on 25 prompts
-N_CTX = 2048
-EMISSIONS_LOG_DIR = "emissions_logs_multi_prompt"
+N_RUNS_PER_PROMPT = 2
+IDLE_BASELINE_S = 30
+COOLDOWN_S = 60
+BOOTSTRAP_REPS = 10000
+BOOTSTRAP_SEED = 20261007
+OUT_DIR = "energy_multi_prompt_revision"
 
-EXPECTED_CPU_BRAND_SUBSTRING = "11th Gen Intel(R) Core(TM) i5-1135G7"
-PLAUSIBLE_POWER_W_MIN = 10.0
-PLAUSIBLE_POWER_W_MAX = 45.0
+# Candidate end-of-turn strings; only those that map to ONE token in a given
+# model's vocabulary are banned (multi-token matches are left alone).
+END_TOKEN_STRINGS = ["<|end|>", "<|eot_id|>", "<|im_end|>", "<end_of_turn>",
+                     "</s>", "<|endoftext|>", "<|end_of_text|>"]
 
 PROMPT_LIST = [
     "A 65-year-old male with a history of GI bleeding presents with atrial fibrillation. Is it safe to prescribe rivaroxaban and daily aspirin? Explain your reasoning and next steps.",
@@ -62,135 +86,247 @@ PROMPT_LIST = [
     "A bipolar patient stabilized on lithium presents with a mild gastrointestinal illness and is prescribed lisinopril for new-onset hypertension. What interaction is likely?",
     "A patient presents 18 hours after intentionally ingesting 20 grams of acetaminophen. Their ALT/AST are mildly elevated. Is it too late to administer N-acetylcysteine (NAC)?",
     "A 75-year-old on warfarin suffers a fall and hits his head. He is asymptomatic and his GCS is 15. Can he be discharged with head injury advice?",
-    "A 6-year-old presents with a severe asthma exacerbation. They have received 3 back-to-back nebulized albuterol/ipratropium treatments and IV corticosteroids, but their SpO2 remains 88% and they appear exhausted. What is the next pharmacological step before intubation?"
+    "A 6-year-old presents with a severe asthma exacerbation. They have received 3 back-to-back nebulized albuterol/ipratropium treatments and IV corticosteroids, but their SpO2 remains 88% and they appear exhausted. What is the next pharmacological step before intubation?",
 ]
 
-# (Insert same MODEL_ROUTING dict from run_full_benchmark.py here)
-MODEL_ROUTING = {
-    "Phi-3.5 Mini (base)": {"repo_id": "QuantFactory/Phi-3.5-mini-instruct-GGUF", "filename": "Phi-3.5-mini-instruct.Q4_K_M.gguf", "type": "chat", "format": None, "stop": None},
-    "LLaMA 3 8B": {"repo_id": "QuantFactory/Meta-Llama-3-8B-GGUF", "filename": "Meta-Llama-3-8B.Q4_K_M.gguf", "type": "base", "format": None, "stop": None},
-    "OpenBio": {"repo_id": "bartowski/OpenBioLLM-Llama3-8B-GGUF", "filename": "OpenBioLLM-Llama3-8B-Q4_K_M.gguf", "type": "chat", "format": "chatml", "stop": ["<|im_end|>"]},
-    "Medilite-QA": {"repo_id": "segestic/MediLITE-QA-GGUF", "filename": "MediLITE-QA.Q4_K_M.gguf", "type": "chat", "format": None, "stop": None},
-    "BioMistral-7B": {"repo_id": "BioMistral/BioMistral-7B-GGUF", "filename": "ggml-model-Q4_K_M.gguf", "type": "chat", "format": "chatml", "stop": ["<|im_end|>"]},
-    "Apollo-7B": {"repo_id": "FreedomIntelligence/Apollo-7B-GGUF", "filename": "Apollo-7B.Q4_K_M.gguf", "type": "chat", "format": "alpaca", "stop": None},
-    "AlpaCare-llama2-7b": {"repo_id": "mradermacher/AlpaCare-llama2-7b-CT_I-II-III_efficient-GGUF", "filename": "AlpaCare-llama2-7b-CT_I-II-III_efficient.Q4_K_M.gguf", "type": "chat", "format": "llama-2", "stop": None},
-    "ClinicalGPT": {"repo_id": "QuantFactory/ClinicalGPT-base-zh-GGUF", "filename": "ClinicalGPT-base-zh.Q4_K_M.gguf", "type": "base", "format": None, "stop": None},
-    "Gemma 2B": {"repo_id": "mlabonne/gemma-2b-GGUF", "filename": "gemma-2b.Q4_K_M.gguf", "type": "chat", "format": "gemma", "stop": None},
-}
+KWH_TO_J = 3.6e6
 
-LOCAL_DIR = "gguf_models"
 
-def generate_once(llm, chat_type, chat_format, stop, prompt, max_tokens):
-    gen_kwargs = dict(max_tokens=max_tokens, temperature=0.0)
-    if stop is not None:
-        gen_kwargs["stop"] = stop
+# ==============================================================================
+# HELPERS
+# ==============================================================================
 
-    t_start = time.perf_counter()
-    tokens_out = 0
+def safe_name(label):
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", label).strip("_")
 
-    if chat_type == "chat":
-        stream = llm.create_chat_completion(
-            messages=[{"role": "user", "content": prompt}],
-            stream=True, **gen_kwargs,
-        )
-        for chunk in stream:
-            tokens_out += 1
-    else:
-        raw_prompt = f"Question: {prompt}\n\nDetailed Medical Answer:"
-        for chunk in llm(raw_prompt, stream=True, **gen_kwargs):
-            tokens_out += 1
 
-    elapsed = time.perf_counter() - t_start
-    return tokens_out, elapsed
+def sampling_defaults():
+    """Effective llama-cpp-python defaults for the parameters we do not set,
+    so the paper can report them exactly (Reviewer 1, point 4)."""
+    sig = inspect.signature(Llama.create_completion).parameters
+    keep = ["top_p", "top_k", "min_p", "repeat_penalty", "presence_penalty",
+            "frequency_penalty", "typical_p", "seed"]
+    return {k: sig[k].default for k in keep if k in sig}
 
-def measure_multi_prompt_energy(llm, chat_type, chat_format, stop, label):
-    if not HAS_CODECARBON:
-        return {"error": "CodeCarbon not installed"}
 
-    os.makedirs(EMISSIONS_LOG_DIR, exist_ok=True)
-    
-    j_per_token_list = []
-    power_w_list = []
+def end_token_ids(llm):
+    ids = {llm.token_eos()}
+    for s in END_TOKEN_STRINGS:
+        try:
+            toks = llm.tokenize(s.encode("utf-8"), add_bos=False, special=True)
+        except TypeError:  # very old llama-cpp-python without `special`
+            continue
+        if len(toks) == 1:
+            ids.add(toks[0])
+    return sorted(i for i in ids if i is not None and i >= 0)
 
-    print(f"    [energy] Starting multi-prompt energy run for {label} ({len(PROMPT_LIST)} prompts x {N_RUNS_PER_PROMPT} runs)")
 
-    for p_idx, prompt in enumerate(PROMPT_LIST):
-        for run_idx in range(N_RUNS_PER_PROMPT):
-            llm.reset()
-            tracker = EmissionsTracker(
-                project_name=f"{label.replace(' ', '_')}_p{p_idx}_r{run_idx}",
-                output_dir=EMISSIONS_LOG_DIR,
-                log_level="error", measure_power_secs=0.5, save_to_file=False,
-            )
-            
-            tracker.start()
-            tokens, elapsed = generate_once(llm, chat_type, chat_format, stop, prompt, MAX_NEW_TOKENS)
-            tracker.stop()
-            
-            energy_kwh = (tracker.final_emissions_data.energy_consumed if tracker.final_emissions_data else 0.0) or 0.0
-            
-            if elapsed > 0 and tokens > 0:
-                power_w = (energy_kwh * 3.6e6) / elapsed
-                energy_joules = energy_kwh * 3.6e6
-                j_per_token = energy_joules / tokens
-                
-                j_per_token_list.append(j_per_token)
-                power_w_list.append(power_w)
-                
-        if (p_idx + 1) % 5 == 0:
-            print(f"    [energy] Completed {p_idx + 1}/{len(PROMPT_LIST)} prompts...")
+def make_tracker(project):
+    return EmissionsTracker(project_name=project, output_dir=OUT_DIR,
+                            log_level="error", measure_power_secs=0.5,
+                            save_to_file=False)
 
-    # Calculate statistics across the full matrix of runs
-    mean_j_tok = statistics.mean(j_per_token_list)
-    median_j_tok = statistics.median(j_per_token_list)
-    sd_j_tok = statistics.stdev(j_per_token_list) if len(j_per_token_list) > 1 else 0.0
-    mean_power = statistics.mean(power_w_list)
 
-    if not (PLAUSIBLE_POWER_W_MIN <= mean_power <= PLAUSIBLE_POWER_W_MAX):
-        print(f"\n[WARNING] {label} avg power ({mean_power:.2f}W) outside plausible laptop bounds.")
-
+def read_tracker(tracker):
+    d = tracker.final_emissions_data
+    if d is None:
+        return None
     return {
-        "multi_prompt_energy": {
-            "total_inferences": len(j_per_token_list),
-            "joules_per_token_mean": mean_j_tok,
-            "joules_per_token_median": median_j_tok,
-            "joules_per_token_sd": sd_j_tok,
-            "avg_power_w": mean_power
-        }
+        "duration_s": float(d.duration),
+        "energy_total_kwh": float(d.energy_consumed or 0.0),
+        "energy_cpu_kwh": float(d.cpu_energy or 0.0),
+        "energy_ram_kwh": float(d.ram_energy or 0.0),
+        "energy_gpu_kwh": float(d.gpu_energy or 0.0),
+        "cpu_power_w_reported": float(d.cpu_power or 0.0),
+        "ram_power_w_reported": float(d.ram_power or 0.0),
     }
 
-def run_one_model(label, path, config, out_path):
-    print(f"\n=== Loading {label} ===")
-    llm = Llama(model_path=path, n_ctx=N_CTX, n_threads=N_THREADS, n_gpu_layers=0, chat_format=config["format"], verbose=False)
-    
-    result = measure_multi_prompt_energy(llm, config["type"], config["format"], config["stop"], label)
-    result["model_info"] = {"base_model": label}
 
-    with open(out_path, "w") as f:
-        json.dump(result, f, indent=4)
-    print(f"Saved {out_path}")
-    
+def measure_idle(label):
+    gc.collect()
+    tracker = make_tracker(f"{safe_name(label)}_idle")
+    tracker.start()
+    time.sleep(IDLE_BASELINE_S)
+    tracker.stop()
+    r = read_tracker(tracker)
+    r["idle_cpu_power_w"] = r["energy_cpu_kwh"] * KWH_TO_J / r["duration_s"]
+    r["idle_total_power_w"] = r["energy_total_kwh"] * KWH_TO_J / r["duration_s"]
+    return r
+
+
+def generate(llm, config, prompt, mode, banned_ids):
+    """Non-streaming generation -> exact completion token count from `usage`."""
+    kw = dict(max_tokens=MAX_NEW_TOKENS, temperature=0.0)
+    if mode == "fixed":
+        kw["logit_bias"] = {tid: -1e9 for tid in banned_ids}
+        # no user stop strings in fixed mode; any template stop that still
+        # fires is detected below via completion_tokens < MAX_NEW_TOKENS
+    elif config["stop"] is not None:
+        kw["stop"] = config["stop"]
+
+    llm.reset()
+    t0 = time.perf_counter()
+    if config["type"] == "chat":
+        out = llm.create_chat_completion(
+            messages=[{"role": "user", "content": prompt}], **kw)
+    else:
+        out = llm(f"Question: {prompt}\n\nDetailed Medical Answer:", **kw)
+    elapsed = time.perf_counter() - t0
+    usage = out.get("usage", {})
+    return {
+        "prompt_tokens": usage.get("prompt_tokens"),
+        "completion_tokens": usage.get("completion_tokens"),
+        "finish_reason": out["choices"][0].get("finish_reason"),
+        "wall_s": elapsed,
+    }
+
+
+def bootstrap_ci_by_prompt(records, key):
+    """95% CI of the mean of per-prompt means, resampling prompts
+    (runs of the same prompt are not independent)."""
+    by_prompt = {}
+    for r in records:
+        if r.get(key) is not None:
+            by_prompt.setdefault(r["prompt_idx"], []).append(r[key])
+    means = [statistics.mean(v) for v in by_prompt.values()]
+    if len(means) < 2:
+        return None
+    rng = random.Random(BOOTSTRAP_SEED)
+    boots = sorted(statistics.mean(rng.choices(means, k=len(means)))
+                   for _ in range(BOOTSTRAP_REPS))
+    return [boots[int(0.025 * BOOTSTRAP_REPS)], boots[int(0.975 * BOOTSTRAP_REPS) - 1]]
+
+
+def summarize(records):
+    ok = [r for r in records if r["completion_tokens"]]
+    s = {"n_inferences": len(ok)}
+    for key in ["j_per_token_cpu", "j_per_token_cpu_idle_sub", "j_per_token_total"]:
+        vals = [r[key] for r in ok]
+        s[key] = {
+            "mean": statistics.mean(vals),
+            "median": statistics.median(vals),
+            "sd": statistics.stdev(vals) if len(vals) > 1 else 0.0,
+            "ci95_prompt_bootstrap": bootstrap_ci_by_prompt(ok, key),
+        }
+    tot_tok = sum(r["completion_tokens"] for r in ok)
+    s["pooled_j_per_token_cpu"] = sum(r["energy_cpu_kwh"] for r in ok) * KWH_TO_J / tot_tok
+    s["pooled_j_per_token_cpu_idle_sub"] = sum(r["energy_cpu_j_idle_sub"] for r in ok) / tot_tok
+    s["mean_cpu_power_w"] = statistics.mean(r["cpu_power_w"] for r in ok)
+    s["sd_cpu_power_w"] = statistics.stdev(r["cpu_power_w"] for r in ok) if len(ok) > 1 else 0.0
+    s["mean_completion_tokens"] = statistics.mean(r["completion_tokens"] for r in ok)
+    s["pct_runs_at_max_tokens"] = 100.0 * sum(
+        r["completion_tokens"] == MAX_NEW_TOKENS for r in ok) / len(ok)
+    return s
+
+
+# ==============================================================================
+# MAIN LOOP
+# ==============================================================================
+
+def run_model(label, path, config, modes):
+    print(f"\n=== {label} ===")
+    llm = Llama(model_path=path, n_ctx=N_CTX, n_threads=N_THREADS, n_gpu_layers=0,
+                chat_format=config["format"], verbose=False)
+    banned = end_token_ids(llm)
+
+    print("  warm-up generation (discarded)")
+    generate(llm, config, PROMPT_LIST[0], "natural", banned)
+
+    print(f"  idle baseline ({IDLE_BASELINE_S}s, model loaded)")
+    idle = measure_idle(label)
+    print(f"    idle CPU-package power: {idle['idle_cpu_power_w']:.2f} W")
+
+    result = {
+        "model": label, "gguf": os.path.basename(path), "routing": config,
+        "banned_end_token_ids_fixed_mode": banned,
+        "idle_baseline": idle, "modes": {},
+    }
+
+    for mode in modes:
+        records = []
+        for p_idx, prompt in enumerate(PROMPT_LIST):
+            for run_idx in range(N_RUNS_PER_PROMPT):
+                tracker = make_tracker(f"{safe_name(label)}_{mode}_p{p_idx}_r{run_idx}")
+                tracker.start()
+                g = generate(llm, config, prompt, mode, banned)
+                tracker.stop()
+                e = read_tracker(tracker)
+                if e is None or not g["completion_tokens"]:
+                    print(f"    [WARN] p{p_idx} r{run_idx}: no energy or 0 tokens")
+                    continue
+                cpu_j = e["energy_cpu_kwh"] * KWH_TO_J
+                cpu_j_sub = max(cpu_j - idle["idle_cpu_power_w"] * e["duration_s"], 0.0)
+                n = g["completion_tokens"]
+                records.append({
+                    "mode": mode, "prompt_idx": p_idx, "run_idx": run_idx, **g, **e,
+                    "cpu_power_w": cpu_j / e["duration_s"],
+                    "energy_cpu_j_idle_sub": cpu_j_sub,
+                    "j_per_token_cpu": cpu_j / n,
+                    "j_per_token_cpu_idle_sub": cpu_j_sub / n,
+                    "j_per_token_total": e["energy_total_kwh"] * KWH_TO_J / n,
+                })
+            if (p_idx + 1) % 5 == 0:
+                print(f"    [{mode}] {p_idx + 1}/{len(PROMPT_LIST)} prompts")
+
+        summ = summarize(records)
+        check_power_plausibility(f"{label} [{mode}]", summ["mean_cpu_power_w"])
+        if mode == "fixed" and summ["pct_runs_at_max_tokens"] < 100:
+            print(f"    [NOTE] only {summ['pct_runs_at_max_tokens']:.0f}% of fixed-mode "
+                  f"runs reached {MAX_NEW_TOKENS} tokens (a multi-token stop string "
+                  f"still fired) -- report this percentage alongside the result.")
+        result["modes"][mode] = {"summary": summ, "runs": records}
+
     del llm
     gc.collect()
     return result
 
+
 def main():
-    # Only batch execution for this specific task
-    for label, config in MODEL_ROUTING.items():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--model", default=None)
+    ap.add_argument("--mode", choices=["natural", "fixed", "both"], default="both")
+    ap.add_argument("--force-host", action="store_true")
+    args = ap.parse_args()
+
+    assert_correct_host(force=args.force_host)
+    assert_rapl_readable(force=args.force_host)
+    os.makedirs(OUT_DIR, exist_ok=True)
+
+    modes = ["natural", "fixed"] if args.mode == "both" else [args.mode]
+    routing = MODEL_ROUTING if args.model is None else {args.model: MODEL_ROUTING[args.model]}
+
+    run_meta = {
+        "cpu_brand": cpu_brand(),
+        "llama_cpp_python_version": llama_cpp.__version__,
+        "codecarbon_version": codecarbon.__version__,
+        "max_new_tokens": MAX_NEW_TOKENS, "temperature": 0.0,
+        "n_ctx": N_CTX, "n_threads": N_THREADS,
+        "n_prompts": len(PROMPT_LIST), "n_runs_per_prompt": N_RUNS_PER_PROMPT,
+        "library_sampling_defaults": sampling_defaults(),
+        "idle_baseline_s": IDLE_BASELINE_S, "cooldown_s": COOLDOWN_S,
+        "started": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    print(json.dumps(run_meta, indent=2, default=str))
+    with open(os.path.join(OUT_DIR, "run_metadata.json"), "w") as f:
+        json.dump(run_meta, f, indent=2, default=str)
+
+    for i, (label, config) in enumerate(routing.items()):
         path = os.path.join(LOCAL_DIR, config["filename"])
         if not os.path.exists(path):
-            print(f"[SKIP] {label}: Model file not found at {path}")
+            print(f"[SKIP] {label}: {path} not found")
             continue
-            
-        out_path = f"multi_prompt_energy_{label}.json"
-        
+        if i > 0:
+            print(f"[COOLDOWN] {COOLDOWN_S}s")
+            time.sleep(COOLDOWN_S)
         try:
-            run_one_model(label, path, config, out_path)
-            # Add a 60-second cooldown between models to prevent thermal throttling bias
-            print("[COOLDOWN] Waiting 60s for thermals to normalize...")
-            time.sleep(60)
+            res = run_model(label, path, config, modes)
+            out = os.path.join(OUT_DIR, f"multi_prompt_energy_{safe_name(label)}.json")
+            with open(out, "w") as f:
+                json.dump(res, f, indent=2, default=str)
+            print(f"Saved {out}")
         except Exception as e:
-            print(f"[ERROR] {label} failed: {e}")
+            print(f"[ERROR] {label}: {e}")
+
 
 if __name__ == "__main__":
     main()
