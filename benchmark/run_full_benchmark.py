@@ -92,12 +92,8 @@ def assert_correct_host(force=False):
     if EXPECTED_CPU_BRAND_SUBSTRING not in brand:
         msg = (
             f"\n[HOST MISMATCH] Expected a CPU brand containing "
-            f"'{EXPECTED_CPU_BRAND_SUBSTRING}' (the laptop this project "
-            f"standardized on after the cloud provider's Intel Xeon / AMD "
-            f"EPYC host-swap and implausible power-draw incidents), but "
-            f"detected {brand!r} instead.\n"
-            f"Running here would reintroduce exactly the cross-host "
-            f"inconsistency this rewrite exists to eliminate.\n"
+            f"'{EXPECTED_CPU_BRAND_SUBSTRING}' to ensure benchmark consistency, "
+            f"but detected {brand!r} instead.\n"
         )
         if force:
             print(msg + "[--force-host specified: continuing anyway. Do "
@@ -112,13 +108,9 @@ def assert_correct_host(force=False):
 
 def assert_rapl_readable(force=False):
     """
-    Confirms RAPL is actually readable BEFORE running the full benchmark
-    -- not after, when you discover the energy numbers are wrong. This
-    check exists because an earlier run without root silently produced
-    a ~34-35W TDP-fallback estimate instead of the real ~15W RAPL
-    measurement, and that error was only caught after the fact by a
-    separate diagnostic script. It should not be possible to repeat
-    that mistake with this script.
+    Verifies that RAPL counters are readable before benchmark execution.
+    Without root privileges, CodeCarbon may silently fall back to a TDP-based
+    estimate instead of utilizing true RAPL hardware measurements.
     """
     rapl_paths = glob.glob("/sys/class/powercap/intel-rapl/intel-rapl:*/energy_uj")
     if not rapl_paths:
@@ -169,9 +161,9 @@ def check_power_plausibility(label, avg_power_w):
             f"\n[POWER IMPLAUSIBLE] {label}: avg_power_w = {avg_power_w:.2f} W "
             f"is outside the expected {PLAUSIBLE_POWER_W_MIN}-"
             f"{PLAUSIBLE_POWER_W_MAX} W range for the pinned laptop "
-            f"(RAPL-validated steady-state baseline: ~34-36 W under load). "
-            f"read, not a TDP fallback estimate; see the RAPL-availability "
-            f"check pattern from rapl_validation_laptop.py).\n"
+            f"(Validated steady-state baseline is ~34-36 W under load). "
+            f"Please verify that RAPL metrics are being read correctly and "
+            f"not falling back to TDP estimates.\n"
         )
     else:
         print(f"[POWER CHECK] {label}: {avg_power_w:.2f} W -- within plausible range.")
@@ -313,16 +305,10 @@ def generate_once(llm, chat_type, chat_format, stop, prompt, max_tokens):
 
 def measure_streaming_latency(llm, chat_type, chat_format, stop):
     """
-    FIX: Run 0 (immediately after model load, or after any long idle gap)
-    is consistently and reproducibly ~6-7x slower on TTFT than steady
-    state across every diagnostic run performed on this hardware --
-    almost certainly a cold cache-load penalty for pulling a multi-GB
-    checkpoint into a memory-constrained (6.96 GB) system. Blending it
-    into the same percentile distribution as warm-state runs distorts
-    p90/p99 in a way that conflates two genuinely different real-world
-    scenarios (first query after a cold boot vs. a query in an
-    already-running session). Both are now reported explicitly and
-    separately instead.
+    Measures Time To First Token (TTFT) and Time Per Output Token (TPOT).
+    Cold-start latency (Run 0) is excluded from the steady-state percentile 
+    distribution to prevent skewing warm-state metrics. Cold starts and 
+    warm starts are reported as separate, distinct metrics.
     """
     ttfts, tpots, prompt_times, overall_spts = [], [], [], []
 
@@ -427,11 +413,9 @@ def measure_throughput(llm, chat_type, chat_format, stop):
 
 def measure_memory_vs_context(model_path, chat_type, chat_format, stop):
     """
-    FIX #5: now takes chat_type explicitly and dispatches on it directly,
-    the same way measure_streaming_latency()/measure_throughput() do --
-    no more "try chat, fall back to raw on exception" guessing, which
-    could silently succeed with the wrong prompt format for base-type
-    models instead of throwing.
+    Measures peak memory (RSS) utilization across varying context lengths.
+    Explicitly requires `chat_type` to ensure correct prompt formatting 
+    for either base or chat models.
     """
     results = {}
     for ctx_len in CONTEXT_LENGTHS_FOR_MEMORY:
@@ -498,8 +482,7 @@ def measure_environmental_impact(llm, chat_type, chat_format, stop, label):
     mean_energy_per_token = statistics.mean(energies)
     avg_power_w = statistics.mean(powers)
 
-    # FIX #7: check plausibility immediately, right where the number is
-    # computed, so it can't be missed downstream in a table somewhere.
+    # Validate power metrics immediately to catch TDP fallback errors early.
     check_power_plausibility(label, avg_power_w)
 
     return {
@@ -661,7 +644,7 @@ def run_one_model(label, path, model_type, chat_format, stop, accuracy, out_path
 
     b1 = result["throughput_metrics"]["batch_1"]["tokens_per_sec"]["mean"]
     print(f"[SANITY CHECK] {label}: batch_1 tokens_per_sec = {b1:.4f} "
-          f"({'OK -- nonzero' if b1 > 0 else 'STILL ZERO -- investigate generate_once()'})")
+          f"({'OK' if b1 > 0 else 'WARNING: Metric is zero'})")
     if accuracy is None:
         print(f"[ACCURACY NOTE] {label}: accuracy is None in this output -- "
               f"not present/resolved in the verified comparison data. Fill "
@@ -731,10 +714,9 @@ def main():
             continue
 
         out_path = f"benchmark_summary_{label}.json"
-        # FIX #4: use each model's own accuracy from MODEL_ROUTING,
-        # falling back to --accuracy only in explicit single-model
-        # --path mode (handled above), never silently shared across
-        # a whole batch.
+        
+        # Ensure accuracy maps to the specific model from MODEL_ROUTING,
+        # preventing silent sharing across batch runs.
         accuracy = config.get("accuracy")
         try:
             all_results[label] = run_one_model(
