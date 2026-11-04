@@ -1,5 +1,5 @@
 """
-contamination_check.py  --  R2-2 (and R3-2 / R3-3 dataset bias, deduplication)
+contamination_check.py 
 =============================================================================
 Word n-gram overlap between the fine-tuning corpus and the EXACT items that
 lm-eval scored. Test items are read from the `doc` field of the
