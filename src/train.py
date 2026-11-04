@@ -93,7 +93,7 @@ def main():
     else:
         run_name = "phi3.5-medical-finetune"
 
-    # 8. Training Arguments (Updated to match thesis text exact constraints)
+    # 8. Training Arguments 
     args = TrainingArguments(
         output_dir=f"./{new_model}",
         eval_strategy="steps",
