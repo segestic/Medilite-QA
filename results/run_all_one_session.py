@@ -1,27 +1,23 @@
 """
-run_all_one_session.py  --  everything for the accuracy side in ONE Kaggle session
+run_all_one_session.py
 ==================================================================================
-Kaggle GPU T4 x2. One command:
+Automated pipeline for model evaluation and GGUF quantization checks.
+Designed to run on a dual-GPU system (e.g., 2x T4).
 
-    !python run_all_one_session.py                    # base + MediLITE: fp16 then Q4
-    !python run_all_one_session.py --with-comparison  # + OpenBioLLM-8B, BioMistral-7B,
-                                                      #   LLaMA 3 8B, Gemma 2B (fp16, long)
+Usage:
+    python run_all_one_session.py                     # base + MediLITE: fp16 then Q4
+    python run_all_one_session.py --with-comparison   # + OpenBioLLM-8B, BioMistral-7B,
+                                                      #   LLaMA 3 8B, Gemma 2B (fp16)
 
-Stages (each skipped if its output already exists, so a re-run resumes):
-  0. install pinned packages (same versions as your original lm-eval cell)
-  1. fp16 lm-eval, base on GPU 0 and MediLITE-QA on GPU 1 IN PARALLEL
-     (identical settings to your original cell: 0-shot, fp16, batch 4,
-     --log_samples) -> also checks the new numbers reproduce Table 4
-  2. Q4_K_M GGUF scoring of the SAME logged requests, base on GPU 0 and
-     MediLITE-QA on GPU 1 in parallel (in-process llama.cpp; no lm-eval
-     gguf backend, which gave a 30% artefact)
-  3. optional: comparison models, fp16, one at a time across both GPUs
-  4. stats_lm_eval.py if present, then zip everything to
-     /kaggle/working/revision_outputs.zip
+Stages (resumable; skips existing outputs):
+  0. Install pinned environment dependencies.
+  1. Run fp16 lm-eval: base (GPU 0) and MediLITE-QA (GPU 1) in parallel.
+  2. Run Q4_K_M GGUF scoring of the logged requests in parallel (in-process 
+     llama.cpp; avoids lm-eval GGUF backend artifacts).
+  3. (Optional) Run comparison models in fp16 sequentially across both GPUs.
+  4. Generate summary statistics and archive results to evaluation_outputs.zip.
 
-Before running: set HF_TOKEN (your secrets cell). At the end use
-"Save Version -> Save & Run All" or download the zip: /kaggle/working is wiped
-when the session ends.
+Requires HF_TOKEN environment variable for gated models.
 """
 
 
@@ -255,8 +251,8 @@ def q4_main(argv=None):
         raise SystemExit(
             f"No samples_*.jsonl found under '{args.fp16_logs}' (searched recursively).\n"
             f"The fp16 logs from your earlier lm-eval run are not in this session. "
-            f"Attach them as a Kaggle dataset and pass e.g. "
-            f"--fp16-logs /kaggle/input/<dataset-name>/medilite")
+            f"Attach them as a dataset and pass e.g. "
+            f"--fp16-logs /input/<dataset-name>/medilite")
     print(f"found fp16 logs for: {sorted(files)}")
     if args.smoke:
         key = next((t for t in files if t.endswith("medical_genetics")), None)
@@ -304,8 +300,6 @@ def q4_main(argv=None):
     print(f"\nwritten to {out_dir}")
 
 
-
-
 # =============================================================== PIPELINE
 import shutil
 import subprocess
@@ -327,8 +321,8 @@ COMPARISON = {
     "llama3_8b":    "meta-llama/Meta-Llama-3-8B",
     "gemma2b":      "google/gemma-2b",
 }
-# submitted Table 4 values, for the reproduction check
-PAPER = {
+
+REFERENCE_ACCURACY = {
     "medilite": {"mmlu_clinical_knowledge": 80.00, "mmlu_medical_genetics": 80.00, "mmlu_anatomy": 65.93,
                  "mmlu_professional_medicine": 76.84, "mmlu_college_biology": 88.89,
                  "mmlu_college_medicine": 67.63, "medqa_4options": 59.86, "pubmedqa": 75.60, "medmcqa": 62.87},
@@ -422,7 +416,7 @@ def stage_install():
 
 
 def check_versions():
-    """Abort early on a bad environment; record versions for the paper (R1-4)."""
+    """Abort early on a bad environment; record versions for reproducibility."""
     code = ("import json, datasets, transformers, torch, peft, llama_cpp, huggingface_hub, importlib.metadata as m;"
             "print(json.dumps({'lm_eval': m.version('lm-eval'), 'datasets': datasets.__version__,"
             "'huggingface_hub': huggingface_hub.__version__,"
@@ -476,14 +470,14 @@ def stage_fp16():
     if jobs:
         run_parallel(jobs)
 
-    print("\n=== Reproduction check vs submitted Table 4 (acc, %) ===")
+    print("\n=== Reference Validation Check (acc, %) ===")
     for name in ("base", "medilite"):
         got = task_acc(f"{SAVE}/{name}")
-        for t, ref in PAPER[name].items():
+        for t, ref in REFERENCE_ACCURACY[name].items():
             g = got.get(t)
             flag = "" if g is not None and abs(g - ref) < 0.5 else "   <-- differs"
-            print(f"  {name:<9}{t:<28} paper {ref:6.2f}  now {g if g is None else round(g, 2)}{flag}")
-    print("  (differences mean Table 4 did not come from this exact setup -- report the new numbers)")
+            print(f"  {name:<9}{t:<28} ref {ref:6.2f}  now {g if g is None else round(g, 2)}{flag}")
+    print("  (Flagged differences indicate deviation from expected reference accuracy)")
 
 
 def stage_q4():
@@ -558,17 +552,16 @@ def pipeline_main():
         stage_comparison()
         print(f"[time] comparison models: {(time.time() - s) / 3600:.2f} h")
     stage_stats(args.with_comparison)
-    # zip results only (NOT the multi-GB model files)
-    stage = "revision_outputs"
+    
+    stage = "evaluation_outputs"
     os.makedirs(stage, exist_ok=True)
     for item in [SAVE, "stats_out", "stats_out_ablation", "environment_versions.json"] + glob.glob("log_*.txt"):
         if os.path.isdir(item):
             shutil.copytree(item, os.path.join(stage, item), dirs_exist_ok=True)
         elif os.path.isfile(item):
             shutil.copy2(item, stage)
-    shutil.make_archive("revision_outputs", "zip", stage)
-    print(f"\nALL DONE in {(time.time() - t0) / 3600:.2f} h -> revision_outputs.zip "
-          f"(Save Version or download before the session ends)")
+    shutil.make_archive("evaluation_outputs", "zip", stage)
+    print(f"\nALL DONE in {(time.time() - t0) / 3600:.2f} h -> evaluation_outputs.zip")
 
 
 if __name__ == "__main__":
