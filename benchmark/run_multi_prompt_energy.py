@@ -1,13 +1,13 @@
 """
-run_multi_prompt_energy.py  (revision for MDPI Sustainability, R1.2 / R3.4)
+run_multi_prompt_energy.py
 =============================================================================
 CodeCarbon/RAPL energy across 25 high-risk clinical prompts, in two modes:
 
-  natural : model may stop at EOS (as in the submitted manuscript)
-  fixed   : EOS / end-of-turn tokens banned via logit_bias, so every
-            generation runs to exactly MAX_NEW_TOKENS (Reviewer 1, point 2)
+  natural : model may stop at EOS.
+  fixed   : EOS / end-of-turn tokens banned via logit_bias, forcing every
+            generation to run to exactly MAX_NEW_TOKENS.
 
-Changes vs. the submitted version:
+Features:
   * host + RAPL-readability guards (imported from run_full_benchmark.py)
   * exact token counts from llama.cpp `usage` (no stream-chunk counting)
   * one discarded warm-up generation per model (removes cold-start energy)
@@ -16,7 +16,7 @@ Changes vs. the submitted version:
     energy_consumed = cpu + ram + gpu; RAM is a model-based estimate)
   * every individual run saved (raw records) for later re-analysis
   * prompt-clustered bootstrap 95% CI, pooled J/token, and %-at-full-length
-  * effective sampling parameters + library versions logged (Reviewer 1, point 4)
+  * effective sampling parameters + library versions logged for reproducibility
 
 Usage:
     sudo $(which python3) run_multi_prompt_energy.py --mode both
@@ -101,8 +101,8 @@ def safe_name(label):
 
 
 def sampling_defaults():
-    """Effective llama-cpp-python defaults for the parameters we do not set,
-    so the paper can report them exactly (Reviewer 1, point 4)."""
+    """Records effective llama-cpp-python defaults for unset parameters
+    to ensure complete reproducibility of the sampling configuration."""
     sig = inspect.signature(Llama.create_completion).parameters
     keep = ["top_p", "top_k", "min_p", "repeat_penalty", "presence_penalty",
             "frequency_penalty", "typical_p", "seed"]
@@ -271,9 +271,9 @@ def run_model(label, path, config, modes):
         summ = summarize(records)
         check_power_plausibility(f"{label} [{mode}]", summ["mean_cpu_power_w"])
         if mode == "fixed" and summ["pct_runs_at_max_tokens"] < 100:
-            print(f"    [NOTE] only {summ['pct_runs_at_max_tokens']:.0f}% of fixed-mode "
-                  f"runs reached {MAX_NEW_TOKENS} tokens (a multi-token stop string "
-                  f"still fired) -- report this percentage alongside the result.")
+            print(f"    [WARNING] Only {summ['pct_runs_at_max_tokens']:.0f}% of fixed-mode "
+                  f"runs reached {MAX_NEW_TOKENS} tokens. A multi-token stop string "
+                  f"likely evaded the logit_bias penalty.")
         result["modes"][mode] = {"summary": summ, "runs": records}
 
     del llm
