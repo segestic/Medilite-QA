@@ -152,7 +152,7 @@ def assert_rapl_readable(force=False):
             print(msg + "[--force-host specified: continuing anyway. "
                   "Energy figures from this run will likely be TDP "
                   "estimates, not real measurements -- do not present "
-                  "them as RAPL-measured in the paper.]\n")
+                  "them as RAPL-measured.]\n")
         else:
             raise SystemExit(msg + "Aborting. Re-run with sudo, or pass "
                               "--force-host to proceed anyway (not "
@@ -169,10 +169,7 @@ def check_power_plausibility(label, avg_power_w):
             f"\n[POWER IMPLAUSIBLE] {label}: avg_power_w = {avg_power_w:.2f} W "
             f"is outside the expected {PLAUSIBLE_POWER_W_MIN}-"
             f"{PLAUSIBLE_POWER_W_MAX} W range for the pinned laptop "
-            f"(RAPL-validated steady-state baseline: ~34-36 W under load). This is the "
-            f"same failure signature as the cloud provider's earlier "
-            f"243-249 W misattribution -- do NOT use this figure in the "
-            f"paper without investigating (check RAPL is actually being "
+            f"(RAPL-validated steady-state baseline: ~34-36 W under load). "
             f"read, not a TDP fallback estimate; see the RAPL-availability "
             f"check pattern from rapl_validation_laptop.py).\n"
         )
@@ -548,12 +545,7 @@ MODEL_ROUTING = {
         "repo_id": "BioMistral/BioMistral-7B-GGUF",
         "filename": "ggml-model-Q4_K_M.gguf",
         "type": "chat", "format": "mistral-instruct", "stop": None,
-        # NOTE: verified spreadsheet shows two different figures for this
-        # model -- a stated average of 57.3 vs. a recalculated ("seg_calc")
-        # average of 58.96666667 from its own per-benchmark row. Flagging
-        # explicitly rather than silently picking one; resolve which is
-        # correct before using in the paper.
-        "accuracy": None,  # SEE NOTE ABOVE -- discrepancy unresolved (57.3 vs 58.97)
+        "accuracy": None, 
     },
     "Apollo-7B": {
         "repo_id": "FreedomIntelligence/Apollo-7B-GGUF",
@@ -565,10 +557,6 @@ MODEL_ROUTING = {
         "repo_id": "mradermacher/AlpaCare-llama2-7b-CT_I-II-III_efficient-GGUF",
         "filename": "AlpaCare-llama2-7b-CT_I-II-III_efficient.Q4_K_M.gguf",
         "type": "chat", "format": "llama-2", "stop": None,
-        # NOTE: 45.36555556 is the true 9-benchmark average. The value
-        # 49.81 seen in an earlier JSON was a mislabeling bug -- that
-        # number is actually this model's single Clinical Knowledge
-        # subscore, not its overall accuracy. Do not reuse 49.81.
         "accuracy": 45.36555556,
     },
     "ClinicalGPT": {
@@ -581,7 +569,7 @@ MODEL_ROUTING = {
         "repo_id": "mlabonne/gemma-2b-GGUF",
         "filename": "gemma-2b.Q4_K_M.gguf",
         "type": "chat", "format": "gemma", "stop": None,
-        "accuracy": None,  # spreadsheet only has "gemma-7b", a different model -- do not conflate
+        "accuracy": None,  
     },
 }
 
@@ -677,7 +665,7 @@ def run_one_model(label, path, model_type, chat_format, stop, accuracy, out_path
     if accuracy is None:
         print(f"[ACCURACY NOTE] {label}: accuracy is None in this output -- "
               f"not present/resolved in the verified comparison data. Fill "
-              f"in manually from a confirmed source before using in the paper.")
+              f"in manually from a confirmed source before using.")
     return result
 
 
@@ -765,7 +753,7 @@ def main():
                          if l in all_results and cfg.get("accuracy") is None]
     if missing_accuracy:
         print(f"\n[ACCURACY GAPS] These models completed successfully but have "
-              f"accuracy=None in their JSON -- resolve before using in the paper: "
+              f"accuracy=None in their JSON -- resolve before using "
               f"{missing_accuracy}")
 
 
