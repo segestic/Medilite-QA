@@ -519,19 +519,6 @@ def measure_environmental_impact(llm, chat_type, chat_format, stop, label):
     }
 
 
-# ==============================================================================
-# MODEL ROUTING
-# FIX #2: all 8 core models restored (none commented out).
-# FIX #3: repo_id/filename corrected against sources already verified
-# working earlier in this project.
-# FIX #4: each model carries its own "accuracy" field (9-benchmark
-# average from the verified comparison spreadsheet's "seg_calc" column),
-# rather than one shared value applied to every model in batch mode.
-# Two models (LLaMA 3 8B, Gemma 2B) do not appear in that spreadsheet at
-# all -- their accuracy is left as None rather than guessed; fill these
-# in from your own verified source before using them in the paper.
-# ==============================================================================
-
 MODEL_ROUTING = {
     "Phi-3.5 Mini (base)": {
         "repo_id": "QuantFactory/Phi-3.5-mini-instruct-GGUF",
@@ -543,7 +530,7 @@ MODEL_ROUTING = {
         "repo_id": "QuantFactory/Meta-Llama-3-8B-GGUF",
         "filename": "Meta-Llama-3-8B.Q4_K_M.gguf",
         "type": "base", "format": None, "stop": None,
-        "accuracy": None,  # not present in the verified comparison spreadsheet -- do not guess
+        "accuracy": None,  
     },
     "OpenBio": {
         "repo_id": "bartowski/OpenBioLLM-Llama3-8B-GGUF",
