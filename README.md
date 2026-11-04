@@ -1,6 +1,44 @@
 # Medilite-QA
 
-This repository contains the pipeline for instruction fine-tuning a Phi-3.5-mini model on medical data (MedMCQA, PubMedQA, and MedDialog) using 4-bit QLoRA.
+This repository contains the pipeline for instruction fine-tuning a Phi-3.5-mini model on medical data (MedMCQA, PubMedQA, and MedQA-USMLE) using 4-bit QLoRA.
+
+## Publication
+
+This repository accompanies the paper:
+
+> Odewole, O.O.; Başaran, S. **MediLITE-QA: Energy-Efficient Medical Question Answering with a Quantized
+> Domain-Specific Language Model on a Commodity Laptop CPU.** *Sustainability* **2026**, 18(21), 11245.
+> https://doi.org/10.3390/su182111245
+
+[![DOI](https://img.shields.io/badge/DOI-10.3390%2Fsu182111245-blue)](https://doi.org/10.3390/su182111245)
+
+Published 4 November 2026 in *Sustainability* (MDPI), Section Sustainable Engineering and Science.
+Paper: https://www.mdpi.com/2071-1050/18/21/11245
+
+### Released models
+
+| Artifact | Repository |
+|---|---|
+| LoRA adapter | [`segestic/phi3.5-mini-4k-qlora-medical-seg-vall_med`](https://huggingface.co/segestic/phi3.5-mini-4k-qlora-medical-seg-vall_med) |
+| Merged model (Transformers) | [`segestic/MediliteQA-phi3.5-mini-all-med`](https://huggingface.co/segestic/MediliteQA-phi3.5-mini-all-med) |
+| GGUF quantizations (CPU inference) | [`segestic/MediLITE-QA-GGUF`](https://huggingface.co/segestic/MediLITE-QA-GGUF) |
+
+### Citation
+
+```bibtex
+@article{odewole2026medilite,
+  author  = {Odewole, Olusegun Oladele and Başaran, Seren},
+  title   = {MediLITE-QA: Energy-Efficient Medical Question Answering with a Quantized
+             Domain-Specific Language Model on a Commodity Laptop CPU},
+  journal = {Sustainability},
+  volume  = {18},
+  number  = {21},
+  pages   = {11245},
+  year    = {2026},
+  doi     = {10.3390/su182111245},
+  url     = {https://www.mdpi.com/2071-1050/18/21/11245}
+}
+```
 
 ## 1. Directory Structure
 
@@ -19,7 +57,7 @@ Medilite-QA/
 
 ## 2. Pipeline Overview
 
-* **`src/data_loader.py`**: Ensures strictly the `train` splits are loaded from MedMCQA (General Medicine), PubMedQA (Biomedical Research), and MedDialog (Clinical Dialogue) to prevent test-set data leakage. It formats all data into standard Phi-3 ChatML (`<|user|>` / `<|assistant|>`).
+* **`src/data_loader.py`**: Ensures strictly the `train` splits are loaded from MedMCQA (General Medicine), PubMedQA (Biomedical Research), and MedQA-USMLE (Clinical Vignettes) to prevent test-set data leakage. It formats all data into standard Phi-3 ChatML (`<|user|>` / `<|assistant|>`).
 * **`src/train.py`**: Configures the model in 4-bit precision (NF4) using `bitsandbytes`, applies LoRA adapters (Rank 32, Alpha 256) to target projection modules, and executes training using `SFTTrainer` with a Paged AdamW 8-bit optimizer and a linear warmup schedule.
 * **`src/convert.py`**: Merges the trained LoRA adapter into the base model, converts it to a base F32 GGUF, and quantizes it into smaller formats (Q8_0, Q5_K_M, Q4_K_M) for edge inference.
 
